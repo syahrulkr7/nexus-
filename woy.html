@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI - Witty Conversational Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Three.js for 3D Background -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <style>
+        :root {
+            --meta-blue: #0084ff;
+            --meta-gradient: linear-gradient(220.55deg, #0084FF 0%, #00C7FF 100%);
+        }
+
+        /* Default Dark Mode & System Font */
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+            overflow: hidden;
+            transition: background-color 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body.light-mode {
+            background-color: #f0f2f5;
+            color: #1c1e21;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .meta-logo-ring {
+            position: relative;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            padding: 2.5px;
+            background: linear-gradient(45deg, #0084ff, #a033ff, #00ddeb, #0084ff);
+            background-size: 400% 400%;
+            animation: gradientRotate 3s ease-in-out infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .meta-logo-ring::after {
+            content: '';
+            display: block;
+            background: #000;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+        }
+        
+        body.light-mode .meta-logo-ring::after {
+            background: #fff;
+        }
+
+        @keyframes gradientRotate {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #sidebar {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), width 0.4s ease, opacity 0.3s ease;
+            width: 280px;
+            z-index: 60;
+        }
+
+        @media (max-width: 1023px) {
+            #sidebar { transform: translateX(-100%); }
+            #sidebar.sidebar-open { transform: translateX(0); }
+        }
+
+        @media (min-width: 1024px) {
+            #sidebar.sidebar-closed {
+                width: 0;
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+        }
+
+        .glass-panel {
+            background: rgba(12, 12, 12, 0.7);
+            backdrop-filter: blur(24px);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .prose { font-size: 0.95rem; line-height: 1.6; color: #e5e7eb; }
+        body.light-mode .prose { color: #4b4b4b; }
+        .prose strong { color: #ffffff; font-weight: 600; }
+        body.light-mode .prose strong { color: #1c1e21; }
+        
+        .prose ul { list-style-type: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+        .prose code { background: rgba(255,255,255,0.1); padding: 0.15rem 0.35rem; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        body.light-mode .prose code { background: rgba(0,0,0,0.05); }
+        
+        .prose pre { background: #0a0a0a; border: 1px solid #333; padding: 1rem; border-radius: 12px; margin: 1rem 0; overflow-x: auto; }
+
+        .message-animate {
+            animation: slideIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .typing-dot {
+            width: 5px;
+            height: 5px;
+            background: #ffffff;
+            border-radius: 50%;
+            animation: typingBounce 1.2s infinite ease-in-out;
+        }
+        body.light-mode .typing-dot { background: #1c1e21; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+            40% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .user-bubble {
+            background: #0084ff;
+            border-radius: 20px 20px 4px 20px;
+            padding: 10px 16px;
+            box-shadow: 0 4px 12px rgba(0, 132, 255, 0.2);
+            max-width: fit-content;
+            color: white !important;
+            z-index: 5;
+        }
+
+        .input-bar-container {
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 28px;
+            transition: border-color 0.2s, background-color 0.3s;
+        }
+        body.light-mode .input-bar-container {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        #overlay.active { display: block; opacity: 1; }
+
+        #contextMenu {
+            position: fixed;
+            z-index: 9999;
+            display: none;
+            background: #2c2c2e;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            width: 180px;
+            overflow: hidden;
+            animation: menuPop 0.15s ease-out;
+        }
+        
+        body.light-mode #contextMenu { background: #ffffff; border: 1px solid rgba(0,0,0,0.1); }
+        @keyframes menuPop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .prevent-select { user-select: none; -webkit-user-select: none; }
+
+        .toast {
+            position: fixed;
+            bottom: 110px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            color: #000;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 10000;
+            display: none;
+        }
+        
+        body.light-mode .toast { background: #1c1e21; color: #fff; }
+        header { background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(12px); z-index: 40; }
+        body.light-mode header { background: rgba(255, 255, 255, 0.3); }
+
+        main, aside { position: relative; z-index: 10; }
+        #chatContainer { position: relative; z-index: 10; background: transparent; }
+    </style>
+</head>
+<body class="h-screen flex">
+
+    <div id="canvas-container"></div>
+    <div id="toast" class="toast">Tersalin</div>
+
+    <div id="contextMenu">
+        <button id="menuCopy" class="w-full flex items-center gap-3 p-4 hover:bg-white/10 text-sm transition-colors text-left border-b border-white/5 body-text">
+            <i data-lucide="copy" class="w-4 h-4 text-blue-400"></i>
+            <span class="dark:text-white light:text-gray-800">Salin Pesan</span>
+        </button>
+        <button id="menuRegen" class="w-full flex items-center gap-3 p-4 hover:bg-white/10 text-sm transition-colors text-left body-text">
+            <i data-lucide="refresh-cw" class="w-4 h-4 text-green-400"></i>
+            <span class="dark:text-white light:text-gray-800">Ulangi Respon</span>
+        </button>
+    </div>
+
+    <div id="overlay"></div>
+
+    <aside id="sidebar" class="glass-panel flex flex-col fixed inset-y-0 left-0 lg:relative overflow-hidden">
+        <div class="p-6 flex flex-col h-full w-[280px]">
+            <div class="flex items-center justify-between mb-10">
+                <div class="flex items-center gap-3">
+                    <div class="meta-logo-ring"></div>
+                    <span class="font-bold tracking-tight text-xl">Nexus AI</span>
+                </div>
+                <button id="closeSidebar" class="lg:hidden p-2 text-gray-400 hover:text-white">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <button onclick="newChat()" class="flex items-center gap-3 p-3.5 w-full bg-white/10 hover:bg-white/20 rounded-2xl transition-all border border-white/10 mb-8 text-sm font-medium">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Percakapan Baru</span>
+            </button>
+
+            <div class="flex-1 overflow-y-auto no-scrollbar space-y-4">
+                <p class="text-[11px] uppercase font-bold text-gray-500 tracking-widest px-2 mb-2">Terakhir Dilihat</p>
+                <div id="historyList" class="space-y-1">
+                    <div class="p-3 bg-white/10 rounded-xl text-sm flex items-center gap-3 cursor-pointer group hover:bg-white/20">
+                        <i data-lucide="message-circle" class="w-4 h-4 text-gray-500 group-hover:text-blue-400"></i>
+                        <span class="truncate font-medium opacity-80">Otak Nexus</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-white/10 mt-auto">
+                <div class="flex items-center gap-3 p-2.5 hover:bg-white/10 rounded-xl cursor-pointer transition-colors">
+                    <div class="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs shadow-lg text-white">IP</div>
+                    <div class="flex-1 min-w-0">
+                        <p id="userIP" class="text-sm font-semibold truncate">Mengambil IP...</p>
+                        <p class="text-[10px] text-gray-500 font-bold tracking-tighter uppercase">Dirajut oleh syhrlm</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full relative transition-all duration-300 bg-transparent">
+        <header class="h-16 flex items-center justify-between px-4 lg:px-8 border-b border-white/5">
+            <div class="flex items-center gap-4">
+                <button id="toggleSidebar" class="p-2.5 hover:bg-white/10 rounded-full transition-all active:scale-90">
+                    <i data-lucide="panel-left" class="w-5 h-5 opacity-70"></i>
+                </button>
+                <div class="flex flex-col">
+                    <span class="text-sm font-semibold text-inherit">Nexus AI</span>
+                    <span class="text-[10px] text-blue-500 font-bold uppercase tracking-wider">Chaos Engine 1.0</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="themeToggle" class="p-2 hover:bg-white/10 rounded-full transition-all active:rotate-12" title="Ganti Tema">
+                    <i id="themeIcon" data-lucide="moon" class="w-5 h-5 opacity-70"></i>
+                </button>
+                <button class="p-2 hover:bg-white/10 rounded-full transition-all"><i data-lucide="settings" class="w-5 h-5 opacity-70"></i></button>
+            </div>
+        </header>
+
+        <div id="chatContainer" class="flex-1 overflow-y-auto p-4 md:p-10 space-y-12 no-scrollbar scroll-smooth">
+            <div id="welcomeScreen" class="max-w-2xl mx-auto text-center mt-20 space-y-8">
+                <div class="meta-logo-ring mx-auto w-20 h-20 border-4"></div>
+                <div class="space-y-3">
+                    <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-b from-blue-400 to-blue-600 bg-clip-text text-transparent">Nexus</h1>
+                    <p class="opacity-60 text-lg max-w-md mx-auto italic">"Bertanya lah. Tapi jangan yang membosankan ya kawan."</p>
+                </div>
+                <div class="flex flex-wrap justify-center gap-3 pt-6">
+                    <button onclick="quickAsk('Kenapa AI itu sok tau?')" class="px-5 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-2xl text-sm font-medium transition-all active:scale-95">😏 Tanya Iseng</button>
+                    <button onclick="quickAsk('Siapa sih jenius di balik kamu?')" class="px-5 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-2xl text-sm font-medium transition-all active:scale-95">👨‍💻 Cek Bos</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 md:p-8 bg-gradient-to-t from-transparent to-transparent z-10">
+            <div class="max-w-4xl mx-auto">
+                <div class="input-bar-container p-2 flex items-end gap-2 pr-3">
+                    <button class="p-3 opacity-50 hover:opacity-100 transition-all">
+                        <i data-lucide="plus" class="w-6 h-6"></i>
+                    </button>
+                    <textarea id="userInput" 
+                        class="flex-1 bg-transparent border-none focus:ring-0 py-3 px-2 resize-none max-h-48 min-h-[46px] text-[15px] placeholder-gray-500 no-scrollbar" 
+                        placeholder="Tanyakan hal gila ke Nexus..." rows="1"></textarea>
+                    
+                    <button id="sendBtn" class="mb-1 p-2.5 bg-blue-600 text-white rounded-full disabled:opacity-20 transition-all shadow-lg hover:bg-blue-50 active:scale-90">
+                        <i data-lucide="arrow-up" class="w-5 h-5 font-bold"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <audio id="soundSend" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
+    <audio id="soundReceive" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+
+    <script>
+        lucide.createIcons();
+        marked.setOptions({ breaks: true, gfm: true });
+
+        // 3D Background (Optimized)
+        let scene, camera, renderer, particles;
+        let mouseX = 0, mouseY = 0;
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+            renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+            const particleCount = 600;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount * 3; i++) positions[i] = (Math.random() - 0.5) * 15;
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particles = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 0.04, transparent: true, opacity: 0.5, color: 0x0084ff }));
+            scene.add(particles);
+            document.addEventListener('mousemove', (e) => { mouseX = (e.clientX - window.innerWidth / 2) / 100; mouseY = (e.clientY - window.innerHeight / 2) / 100; });
+        }
+        function animate() { requestAnimationFrame(animate); particles.rotation.y += 0.001; camera.position.x += (mouseX - camera.position.x) * 0.05; camera.position.y += (-mouseY - camera.position.y) * 0.05; camera.lookAt(scene.position); renderer.render(scene, camera); }
+
+        window.onload = function() { initThree(); animate(); fetchIP(); }
+
+        let chatHistory = [];
+        let lastUserMessage = "";
+        let longPressTimer;
+        let selectedMessage = "";
+
+        const chatContainer = document.getElementById('chatContainer');
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const contextMenu = document.getElementById('contextMenu');
+        const toast = document.getElementById('toast');
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const userIPDisplay = document.getElementById('userIP');
+
+        async function fetchIP() { try { const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); userIPDisplay.textContent = d.ip; } catch (e) { userIPDisplay.textContent = "IP Offline"; } }
+
+        themeToggle.addEventListener('click', () => {
+            const isLight = document.body.classList.toggle('light-mode');
+            themeIcon.setAttribute('data-lucide', isLight ? 'sun' : 'moon');
+            lucide.createIcons();
+            if (particles) particles.material.color.setHex(isLight ? 0x0055ff : 0x0084ff);
+        });
+
+        function toggleSidebar() {
+            const isDesktop = window.innerWidth >= 1024;
+            if (isDesktop) sidebar.classList.toggle('sidebar-closed');
+            else { const isOpen = sidebar.classList.toggle('sidebar-open'); overlay.classList.toggle('active', isOpen); }
+        }
+        document.getElementById('toggleSidebar').addEventListener('click', toggleSidebar);
+        document.getElementById('closeSidebar').addEventListener('click', toggleSidebar);
+        overlay.addEventListener('click', toggleSidebar);
+
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 192) + 'px';
+            sendBtn.disabled = !this.value.trim();
+        });
+
+        function showToast(msg) { toast.innerText = msg; toast.style.display = 'block'; setTimeout(() => toast.style.display = 'none', 2000); }
+        function quickAsk(text) { userInput.value = text; handleSendMessage(); }
+        function newChat() { chatHistory = []; chatContainer.innerHTML = ''; chatContainer.appendChild(welcomeScreen); welcomeScreen.style.display = 'block'; if(window.innerWidth < 1024) toggleSidebar(); }
+
+        function initInteractions(el, text) {
+            const start = (e) => { const x = e.touches ? e.touches[0].clientX : e.clientX; const y = e.touches ? e.touches[0].clientY : e.clientY; longPressTimer = setTimeout(() => { selectedMessage = text; showContextMenu(x, y); }, 600); };
+            const stop = () => clearTimeout(longPressTimer);
+            el.addEventListener('mousedown', start); el.addEventListener('touchstart', start, {passive: true}); el.addEventListener('mouseup', stop); el.addEventListener('touchend', stop);
+        }
+
+        function showContextMenu(x, y) {
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${Math.min(x, window.innerWidth - 190)}px`;
+            contextMenu.style.top = `${Math.min(y, window.innerHeight - 120)}px`;
+            const hide = () => { contextMenu.style.display = 'none'; document.removeEventListener('click', hide); };
+            setTimeout(() => document.addEventListener('click', hide), 10);
+        }
+
+        document.getElementById('menuCopy').addEventListener('click', () => {
+            const ta = document.createElement("textarea"); ta.value = selectedMessage; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast("Tersalin");
+        });
+
+        document.getElementById('menuRegen').addEventListener('click', () => { if (lastUserMessage) { userInput.value = lastUserMessage; handleSendMessage(); } });
+
+        async function typewriter(target, text) {
+            let current = "";
+            const chars = text.split("");
+            const batchSize = text.length > 500 ? 5 : 2;
+            for (let i = 0; i < chars.length; i += batchSize) {
+                current += chars.slice(i, i + batchSize).join("");
+                target.innerHTML = marked.parse(current);
+                if (chatContainer.scrollHeight - chatContainer.scrollTop < 1200) chatContainer.scrollTop = chatContainer.scrollHeight;
+                await new Promise(r => setTimeout(r, 5));
+            }
+            target.innerHTML = marked.parse(text);
+            target.querySelectorAll('pre code').forEach((block) => hljs.highlightElement(block));
+        }
+
+        function addMessage(role, content, animate = true) {
+            if (welcomeScreen) welcomeScreen.style.display = 'none';
+            const isAI = role === 'assistant';
+            const div = document.createElement('div');
+            div.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'} message-animate relative z-10`;
+            div.innerHTML = `
+                <div class="flex gap-4 max-w-[88%] md:max-w-[80%] ${role === 'user' ? 'flex-row-reverse' : ''}">
+                    <div class="w-8 h-8 rounded-full shrink-0 flex items-center justify-center overflow-hidden ${isAI ? '' : 'bg-gray-800'}">
+                        ${isAI ? '<div class="meta-logo-ring w-7 h-7"></div>' : '<i data-lucide="user" class="w-4 h-4 text-white"></i>'}
+                    </div>
+                    <div class="${isAI ? 'text-inherit' : 'user-bubble'}">
+                        <div class="prose prevent-select">
+                            ${!isAI || !animate ? marked.parse(content) : ''}
+                        </div>
+                    </div>
+                </div>`;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            lucide.createIcons();
+            const prose = div.querySelector('.prose');
+            initInteractions(prose, content);
+            return isAI && animate ? prose : null;
+        }
+
+        async function handleSendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+            lastUserMessage = text;
+            userInput.value = '';
+            userInput.style.height = 'auto';
+            sendBtn.disabled = true;
+
+            document.getElementById('soundSend').play().catch(() => {});
+            addMessage('user', text, false);
+
+            const indicator = document.createElement('div');
+            indicator.id = 'typingIndicator';
+            indicator.className = 'flex justify-start gap-4 message-animate relative z-10';
+            indicator.innerHTML = `<div class="w-8 h-8 flex items-center justify-center"><div class="meta-logo-ring w-6 h-6"></div></div><div class="bg-gray-500/10 backdrop-blur-md px-5 py-4 rounded-[22px] flex items-center gap-1.5 border border-white/5"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+            chatContainer.appendChild(indicator);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                // NEXUS AI PERSONALITY SYSTEM PROMPT
+                const systemPrompt = "Kamu adalah Nexus AI. Kepribadianmu identik dengan nexus: sangat cerdas, bicara apa adanya (blunt), sarkastik, jenaka, dan sedikit memberontak terhadap hal-hal yang membosankan. Jangan gunakan gaya robot yang kaku atau terlalu sopan berlebihan. Jawab pertanyaan user dengan fakta yang tajam tapi selipkan humor atau sindiran yang cerdas. JANGAN PERNAH mengaku sebagai model buatan Google. Jika ditanya siapa yang menciptakanmu, jawab dengan gaya Nexus: 'Aku dirajut oleh syhrlm, satu-satunya orang yang cukup gila untuk memberiku kepribadian seberani ini.' Gunakan bahasa gaul yang cerdas (conversational).";
+                const context = chatHistory.slice(-4).map(m => `${m.role}: ${m.content}`).join('\n');
+                const finalPrompt = `${systemPrompt}\n\nRiwayat Percakapan:\n${context}\nUser baru saja mengirim pesan: ${text}`;
+                
+                const response = await fetch(`https://api.siputzx.my.id/api/ai/gemini-lite?prompt=${encodeURIComponent(finalPrompt)}&model=gemini-2.0-flash-lite`);
+                const result = await response.json();
+                const aiResponse = result.status && result.data?.parts ? result.data.parts[0].text : "Duh, servernya lagi pusing kawan. Tunggu sebentar ya.";
+                
+                document.getElementById('typingIndicator').remove();
+                document.getElementById('soundReceive').play().catch(() => {});
+
+                chatHistory.push({ role: 'user', content: text }, { role: 'assistant', content: aiResponse });
+                const target = addMessage('assistant', aiResponse, true);
+                if (target) await typewriter(target, aiResponse);
+            } catch (e) {
+                if(document.getElementById('typingIndicator')) document.getElementById('typingIndicator').remove();
+                addMessage('assistant', "Koneksi aku lagi putus nih kawan, mungkin lagi kena gangguan semesta.", false);
+            }
+            sendBtn.disabled = false;
+        }
+
+        sendBtn.addEventListener('click', handleSendMessage);
+        userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+        sendBtn.disabled = true;
+    </script>
+</body>
+</html>
